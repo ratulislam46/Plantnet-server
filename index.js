@@ -5,8 +5,10 @@ const cookieParser = require('cookie-parser')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 const jwt = require('jsonwebtoken')
 
+const stripe = require('stripe')(process.env.STRIPE_SK_KEY);
 const port = process.env.PORT || 3000
 const app = express()
+
 // middleware
 const corsOptions = {
   origin: ['http://localhost:5173', 'http://localhost:5174'],
@@ -46,6 +48,7 @@ async function run() {
   try {
 
     const planetsCollection = client.db('planetnet').collection('plants');
+    const ordersCollection = client.db('planetnet').collection('orders');
 
     // Generate jwt token
     app.post('/jwt', async (req, res) => {
@@ -83,9 +86,33 @@ async function run() {
     })
 
     // single plant get from db 
-    app.get('/plant/:id',async(req,res)=>{
+    app.get('/plant/:id', async (req, res) => {
       const id = req.params.id;
-      const result = await planetsCollection.findOne({_id:new ObjectId(id)})
+      const result = await planetsCollection.findOne({ _id: new ObjectId(id) })
+      res.send(result)
+    })
+
+    // create payment intent for order 
+    app.post('/create-payment-intent', async (req, res) => {
+      const { plantId, quantity } = req.body;
+      const plant = await planetsCollection.findOne({ _id: new ObjectId(plantId) })
+      if (!plant) return res.status(404).send({ message: 'Plant Not Found' });
+      const totalPrice = quantity * plant?.price * 100
+
+      // stripe 
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: totalPrice,
+        currency: 'usd',
+        automatic_payment_methods: { enabled: true },
+      });
+
+      res.send({ clientSecret: paymentIntent.client_secret })
+    })
+
+    // save order data in orders collection in db 
+    app.post('/order', async (req, res) => {
+      const orderData = req.body;
+      const result = await ordersCollection.insertOne(orderData);
       res.send(result)
     })
 
