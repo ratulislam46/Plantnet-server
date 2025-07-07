@@ -49,6 +49,7 @@ async function run() {
 
     const planetsCollection = client.db('planetnet').collection('plants');
     const ordersCollection = client.db('planetnet').collection('orders');
+    const usersCollection = client.db('planetnet').collection('users');
 
     // Generate jwt token
     app.post('/jwt', async (req, res) => {
@@ -113,6 +114,27 @@ async function run() {
     app.post('/order', async (req, res) => {
       const orderData = req.body;
       const result = await ordersCollection.insertOne(orderData);
+      res.send(result)
+    })
+
+    app.post('/user', async (req, res) => {
+      const userData = req.body;
+      userData.role = 'customer'
+      userData.create_at = new Date().toISOString()
+      userData.last_loggedIn = new Date().toISOString()
+
+      // cheack db by user email if email is already have db then update last logged in time
+      const query = { email: userData.email }
+      const alreadyUserDB = await usersCollection.findOne(query)
+
+      if (!!alreadyUserDB) {
+        const result = await usersCollection.updateOne(query, {
+          $set: { last_loggedIn: new Date().toISOString() }
+        })
+        return res.send(result)
+      }
+
+      const result = await usersCollection.insertOne(userData)
       res.send(result)
     })
 
